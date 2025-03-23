@@ -333,7 +333,7 @@ if __name__ == "__main__":
     monitor = Yad2Monitor()
 
     # The exact URL provided by the user
-    custom_url = "https://www.yad2.co.il/vehicles/cars?manufacturer=41&model=10574&year=2021-2023&price=90000--1&km=0-100000&hand=0-1&seats=5&gearBox=102&yad2_source=latestSearchesPage"
+    custom_url = "https://www.yad2.co.il/vehicles/cars?manufacturer=41&model=10574&year=2021-2023&km=0-100000&hand=0-1&seats=5&gearBox=102&yad2_source=latestSearchesPage"
 
     # Start the monitor
     monitor.run_monitor(
