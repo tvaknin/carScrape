@@ -6,6 +6,8 @@ import re
 from datetime import datetime
 import os
 
+from TelegramHelper import TelegramHelper
+
 
 class Yad2Monitor:
     def __init__(self):
@@ -22,6 +24,10 @@ class Yad2Monitor:
         ]
         self.load_history()
         self.last_request_time = 0
+        self.telegram = TelegramHelper(
+            bot_token="8177081670:AAHuO7F658tHTUX9rfXaaAYeqpu5_LmV7Ws",  # Replace with your bot token
+            chat_id="-1002602358259"  # Replace with your group chat ID
+        )
 
     def load_history(self):
         """Load previously seen listings from file"""
@@ -251,6 +257,7 @@ class Yad2Monitor:
     def run_monitor(self, url=None, interval_minutes=30, run_forever=True):
         """
         Main monitoring function. Checks for new listings at specified intervals.
+        Sends notifications to Telegram when new listings are found.
 
         Parameters:
             url: Complete URL to monitor
@@ -263,6 +270,7 @@ class Yad2Monitor:
 
         print(f"Starting Yad2 monitor with URL: {url}")
         print(f"Checking every {interval_minutes} minutes (with some randomization)")
+        print("Telegram notifications enabled")
 
         try:
             iteration = 1
@@ -282,10 +290,28 @@ class Yad2Monitor:
                     # Display all current listings
                     self.display_listings(listings)
 
-                    # Display new listings if any
+                    # Handle new listings if any
                     if new_listings:
                         self.display_listings(new_listings, is_new=True)
-                        print(f"\n*** Found {len(new_listings)} new listings! ***")
+                        num_new = len(new_listings)
+                        print(f"\n*** Found {num_new} new listings! ***")
+
+                        # Send Telegram notification
+                        print("Sending notifications to Telegram...")
+
+                        # Add the search URL to each listing for the Telegram message
+                        for listing in new_listings:
+                            if 'id' in listing:
+                                listing_id = listing['id']
+                                listing['url'] = f"https://www.yad2.co.il/item/{listing_id}"
+                            else:
+                                listing['url'] = url  # Fallback to search URL
+
+                        # Send the listings to Telegram
+                        self.telegram.send_multiple_listings(new_listings, is_new=True)
+                        self.telegram.send_multiple_listings(listings, is_new=False)
+
+                        print("Telegram notifications sent!")
                     else:
                         print("\nNo new listings found.")
 
