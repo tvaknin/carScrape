@@ -254,41 +254,21 @@ class Yad2Monitor:
 
         print("\n" + "-" * 60)
 
-    def check_url(self, url):
-        """Check a single URL for new listings"""
-        # Fetch the page
-        html_content = self.fetch_page(url)
-        if not html_content:
-            print(f"Failed to fetch page: {url}")
-            return [], []
-
-        # Parse and check for new listings
-        listings = self.parse_car_listings(html_content)
-        new_listings = self.check_for_new_listings(listings)
-
-        return listings, new_listings
-
-    def run_monitor(self, urls=None, interval_minutes=30, run_forever=True):
+    def run_monitor(self, url=None, interval_minutes=30, run_forever=True):
         """
         Main monitoring function. Checks for new listings at specified intervals.
         Sends notifications to Telegram when new listings are found.
 
         Parameters:
-            urls: List of URLs to monitor
+            url: Complete URL to monitor
             interval_minutes: How often to check (in minutes)
             run_forever: Whether to run indefinitely or just once
         """
-        if not urls:
-            print("Error: At least one URL is required")
+        if not url:
+            print("Error: URL is required")
             return
 
-        # Convert single URL to list if needed
-        if isinstance(urls, str):
-            urls = [urls]
-
-        print(f"Starting Yad2 monitor with {len(urls)} URLs")
-        for i, url in enumerate(urls, 1):
-            print(f"URL {i}: {url}")
+        print(f"Starting Yad2 monitor with URL: {url}")
         print(f"Checking every {interval_minutes} minutes (with some randomization)")
         print("Telegram notifications enabled")
 
@@ -298,50 +278,45 @@ class Yad2Monitor:
                 current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{current_time}] Check #{iteration}")
 
-                all_listings = []
-                all_new_listings = []
+                # Fetch the page
+                html_content = self.fetch_page(url)
+                if not html_content:
+                    print("Failed to fetch page, will try again later.")
+                else:
+                    # Parse and check for new listings
+                    listings = self.parse_car_listings(html_content)
+                    new_listings = self.check_for_new_listings(listings)
 
-                # Check each URL one by one
-                for i, url in enumerate(urls, 1):
-                    print(f"\nChecking URL {i}: {url}")
-                    listings, new_listings = self.check_url(url)
-
-                    # Display all current listings for this URL
-                    print(f"URL {i} results:")
+                    # Display all current listings
                     self.display_listings(listings)
 
-                    # Add these listings to our collection
-                    all_listings.extend(listings)
-                    all_new_listings.extend(new_listings)
+                    # Handle new listings if any
+                    if new_listings:
+                        self.display_listings(new_listings, is_new=True)
+                        num_new = len(new_listings)
+                        print(f"\n*** Found {num_new} new listings! ***")
 
-                # Handle new listings if any
-                if all_new_listings:
-                    self.display_listings(all_new_listings, is_new=True)
-                    num_new = len(all_new_listings)
-                    print(f"\n*** Found {num_new} new listings across all URLs! ***")
+                        # Send Telegram notification
+                        print("Sending notifications to Telegram...")
 
-                    # Send Telegram notification
-                    print("Sending notifications to Telegram...")
+                        # Add the search URL to each listing for the Telegram message
+                        for listing in new_listings:
+                            if 'id' in listing:
+                                listing_id = listing['id']
+                                listing['url'] = f"https://www.yad2.co.il/item/{listing_id}"
+                            else:
+                                listing['url'] = url  # Fallback to search URL
 
-                    # Add the search URL to each listing for the Telegram message
-                    for listing in all_new_listings:
-                        if 'id' in listing:
-                            listing_id = listing['id']
-                            listing['url'] = f"https://www.yad2.co.il/item/{listing_id}"
-                        else:
-                            # Fallback to first URL if we can't determine the specific one
-                            listing['url'] = urls[0]
+                        # Send the listings to Telegram
+                        self.telegram.send_multiple_listings(new_listings, is_new=True)
+                        self.telegram.send_multiple_listings(listings, is_new=False)
 
-                    # Send the listings to Telegram
-                    self.telegram.send_multiple_listings(all_new_listings, is_new=True)
-                    self.telegram.send_multiple_listings(all_listings, is_new=False)
+                        print("Telegram notifications sent!")
+                    else:
+                        print("\nNo new listings found.")
 
-                    print("Telegram notifications sent!")
-                else:
-                    print("\nNo new listings found across all URLs.")
-
-                # Save the updated history
-                self.save_history()
+                    # Save the updated history
+                    self.save_history()
 
                 # If not running forever, break after one check
                 if not run_forever:
@@ -350,6 +325,10 @@ class Yad2Monitor:
                 # Sleep until next check with randomization
                 jitter = random.uniform(-5, 5)  # +/- 5 minutes
                 actual_interval = max(15, interval_minutes + jitter)  # Ensure minimum 15 min
+
+                next_check_time = datetime.now().strftime("%H:%M:%S")
+                next_check_date = (datetime.now() +
+                                   pd.Timedelta(minutes=actual_interval)).strftime("%H:%M:%S")
 
                 print(f"Next check in {actual_interval:.1f} minutes...")
 
@@ -372,16 +351,18 @@ class Yad2Monitor:
             print(f"Error in monitor: {e}")
             self.save_history()
 
+
+# Example usage
 if __name__ == "__main__":
+    import pandas as pd  # For timedelta calculation
 
     monitor = Yad2Monitor()
 
-    urls = [
-        "https://www.yad2.co.il/vehicles/cars?manufacturer=41&model=10574&year=2021-2023&km=0-100000&hand=0-1&seats=5&gearBox=102&yad2_source=latestSearchesPage",
-        "https://www.yad2.co.il/vehicles/cars?year=2021-2024&price=-1-140000&km=10-55000&engineval=1600-2000&hand=0-1&topArea=2&seats=5&engineType=1101&gearBox=102&ownerID=1"
-    ]
+    # The exact URL provided by the user
+    custom_url = "https://www.yad2.co.il/vehicles/cars?manufacturer=41&model=10574&year=2021-2023&km=0-100000&hand=0-1&seats=5&gearBox=102&yad2_source=latestSearchesPage"
 
+    # Start the monitor
     monitor.run_monitor(
-        urls=urls,
-        interval_minutes=30
+        url=custom_url,
+        interval_minutes=30  # Check every 30 minutes (with randomization)
     )
